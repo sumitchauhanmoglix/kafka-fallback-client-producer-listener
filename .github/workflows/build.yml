@@ -1,0 +1,90 @@
+name: CI Build & Test Matrix
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  verify-module-parity:
+    name: Verify Module Parity (Boot 2 vs Boot 3)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run Module Sync & Parity Check
+        run: python3 scripts/check-module-sync.py
+
+  build-and-test:
+    name: ${{ matrix.name }}
+    needs: verify-module-parity
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Spring Boot 2 Matrix (Java 8, 11, 17)
+          - module: kafka-fallback-client-boot2
+            boot-version: "2.7.18"
+            java-version: "8"
+            name: "Boot 2.7.18 | JDK 8"
+
+          - module: kafka-fallback-client-boot2
+            boot-version: "2.7.18"
+            java-version: "11"
+            name: "Boot 2.7.18 | JDK 11"
+
+          - module: kafka-fallback-client-boot2
+            boot-version: "2.7.18"
+            java-version: "17"
+            name: "Boot 2.7.18 | JDK 17"
+
+          # Spring Boot 3 Matrix (Java 17, 21)
+          - module: kafka-fallback-client-boot3
+            boot-version: "3.2.12"
+            java-version: "17"
+            name: "Boot 3.2.12 | JDK 17"
+
+          - module: kafka-fallback-client-boot3
+            boot-version: "3.3.6"
+            java-version: "17"
+            name: "Boot 3.3.6 | JDK 17"
+
+          - module: kafka-fallback-client-boot3
+            boot-version: "3.4.2"
+            java-version: "17"
+            name: "Boot 3.4.2 | JDK 17"
+
+          - module: kafka-fallback-client-boot3
+            boot-version: "3.4.2"
+            java-version: "21"
+            name: "Boot 3.4.2 | JDK 21"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.java-version }}
+          cache: 'maven'
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
+
+      - name: Test ${{ matrix.name }}
+        run: |
+          ./mvnw clean verify \
+            -pl ${{ matrix.module }} \
+            -am \
+            -Dspring.boot.version=${{ matrix.boot-version }}

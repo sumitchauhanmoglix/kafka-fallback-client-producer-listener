@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.moglix.kafka.fallback.boot3.autoconfigure.KafkaFallbackBoot3AutoConfiguration
