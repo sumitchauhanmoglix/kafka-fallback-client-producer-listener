@@ -30,6 +30,11 @@ public class KafkaFallbackProperties implements Serializable {
     private String apiKey;
 
     /**
+     * Optional authentication token for the fallback API (sent in Authorization and token headers).
+     */
+    private String token;
+
+    /**
      * Timeout configurations.
      */
     private Timeouts timeouts = new Timeouts();
@@ -74,6 +79,14 @@ public class KafkaFallbackProperties implements Serializable {
 
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
     }
 
     public Timeouts getTimeouts() {

@@ -47,6 +47,7 @@ public class KafkaFallbackBoot2AutoConfiguration {
         return new RestTemplateFallbackHttpClient(
                 properties.getApiUrl(),
                 properties.getApiKey(),
+                properties.getToken(),
                 objectMapper,
                 properties.getTimeouts().getApiConnectTimeoutMs(),
                 properties.getTimeouts().getApiReadTimeoutMs(),

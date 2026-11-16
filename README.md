@@ -180,6 +180,7 @@ All properties are configured under `kafka.fallback.*`:
 | `kafka.fallback.application-name` | `${spring.application.name}` | Calling application name sent in fallback DTO |
 | `kafka.fallback.api-url` | *(Required)* | HTTP fallback endpoint (e.g. `http://fallback-api/v1/messages`) |
 | `kafka.fallback.api-key` | `""` | Optional API Key sent in `X-API-Key` HTTP header |
+| `kafka.fallback.token` | `""` | Optional Auth Token sent in `Authorization: Bearer <token>` and `token` headers |
 | `kafka.fallback.timeouts.kafka-send-timeout-ms` | `2000` | Max timeout for Kafka delivery before fallback |
 | `kafka.fallback.timeouts.api-connect-timeout-ms` | `1000` | HTTP connect timeout for fallback service |
 | `kafka.fallback.timeouts.api-read-timeout-ms` | `3000` | HTTP read timeout for fallback service |

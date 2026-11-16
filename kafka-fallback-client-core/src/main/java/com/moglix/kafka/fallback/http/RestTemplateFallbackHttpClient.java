@@ -27,16 +27,17 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
 
     private final String apiUrl;
     private final String apiKey;
+    private final String token;
     private final RestTemplate restTemplate;
     private final int maxRetries;
     private final long retryBackoffMs;
 
     public RestTemplateFallbackHttpClient(String apiUrl, String apiKey, int connectTimeoutMs, int readTimeoutMs) {
-        this(apiUrl, apiKey, null, connectTimeoutMs, readTimeoutMs, 2, 200L);
+        this(apiUrl, apiKey, null, null, connectTimeoutMs, readTimeoutMs, 2, 200L);
     }
 
     public RestTemplateFallbackHttpClient(String apiUrl, String apiKey, int connectTimeoutMs, int readTimeoutMs, int maxRetries, long retryBackoffMs) {
-        this(apiUrl, apiKey, null, connectTimeoutMs, readTimeoutMs, maxRetries, retryBackoffMs);
+        this(apiUrl, apiKey, null, null, connectTimeoutMs, readTimeoutMs, maxRetries, retryBackoffMs);
     }
 
     public RestTemplateFallbackHttpClient(String apiUrl,
@@ -46,8 +47,20 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
                                           int readTimeoutMs,
                                           int maxRetries,
                                           long retryBackoffMs) {
+        this(apiUrl, apiKey, null, objectMapper, connectTimeoutMs, readTimeoutMs, maxRetries, retryBackoffMs);
+    }
+
+    public RestTemplateFallbackHttpClient(String apiUrl,
+                                          String apiKey,
+                                          String token,
+                                          ObjectMapper objectMapper,
+                                          int connectTimeoutMs,
+                                          int readTimeoutMs,
+                                          int maxRetries,
+                                          long retryBackoffMs) {
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
+        this.token = token;
         this.maxRetries = Math.max(1, maxRetries);
         this.retryBackoffMs = Math.max(50, retryBackoffMs);
 
@@ -73,8 +86,13 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
 
     // Constructor for testing with mock RestTemplate
     public RestTemplateFallbackHttpClient(String apiUrl, String apiKey, RestTemplate restTemplate, int maxRetries, long retryBackoffMs) {
+        this(apiUrl, apiKey, null, restTemplate, maxRetries, retryBackoffMs);
+    }
+
+    public RestTemplateFallbackHttpClient(String apiUrl, String apiKey, String token, RestTemplate restTemplate, int maxRetries, long retryBackoffMs) {
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
+        this.token = token;
         this.restTemplate = restTemplate;
         this.maxRetries = Math.max(1, maxRetries);
         this.retryBackoffMs = Math.max(50, retryBackoffMs);
@@ -92,6 +110,12 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
 
         if (apiKey != null && !apiKey.trim().isEmpty()) {
             headers.set("X-API-Key", apiKey.trim());
+        }
+
+        if (token != null && !token.trim().isEmpty()) {
+            String trimmedToken = token.trim();
+            headers.set("token", trimmedToken);
+            headers.set(HttpHeaders.AUTHORIZATION, trimmedToken.startsWith("Bearer ") ? trimmedToken : "Bearer " + trimmedToken);
         }
 
         HttpEntity<FallbackMessageRequest> entity = new HttpEntity<>(request, headers);
@@ -137,6 +161,14 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
 
     public String getApiUrl() {
         return apiUrl;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public String getToken() {
+        return token;
     }
 
     public RestTemplate getRestTemplate() {
