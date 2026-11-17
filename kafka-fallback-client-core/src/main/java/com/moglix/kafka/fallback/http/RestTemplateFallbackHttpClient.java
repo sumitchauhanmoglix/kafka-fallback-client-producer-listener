@@ -131,7 +131,8 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
                         FallbackApiResponse.class
                 );
 
-                if (response.getStatusCode().is2xxSuccessful()) {
+                int statusCode = extractStatusCode(response);
+                if (statusCode >= 200 && statusCode < 300) {
                     FallbackApiResponse body = response.getBody();
                     if (body == null) {
                         body = new FallbackApiResponse(null, "BUFFERED");
@@ -140,7 +141,7 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
                             request.getTopic(), body.getMessageId());
                     return body;
                 } else {
-                    throw new RuntimeException("Fallback API returned HTTP status: " + response.getStatusCodeValue());
+                    throw new RuntimeException("Fallback API returned HTTP status: " + statusCode);
                 }
             } catch (Exception e) {
                 lastException = e;
@@ -157,6 +158,18 @@ public class RestTemplateFallbackHttpClient implements FallbackHttpClient {
         }
 
         throw lastException != null ? lastException : new RuntimeException("Unknown error calling fallback API");
+    }
+
+    private int extractStatusCode(ResponseEntity<?> response) {
+        try {
+            java.lang.reflect.Method getStatusCodeMethod = response.getClass().getMethod("getStatusCode");
+            Object statusObj = getStatusCodeMethod.invoke(response);
+            java.lang.reflect.Method valueMethod = statusObj.getClass().getMethod("value");
+            return (Integer) valueMethod.invoke(statusObj);
+        } catch (Exception e) {
+            log.error("Failed to extract HTTP status code from ResponseEntity", e);
+            throw new RuntimeException("Unable to determine HTTP response status", e);
+        }
     }
 
     public String getApiUrl() {

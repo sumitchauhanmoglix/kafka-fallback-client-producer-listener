@@ -61,9 +61,15 @@ Supports both **Spring Boot 2** (Java 8+) and **Spring Boot 3** (Java 17+).
 
 ## 2. Fallback Message Contract (`POST /v1/messages`)
 
-When routing to the fallback service, the client sends a POST request matching the specification:
+When routing to the fallback service, the client executes an HTTP `POST` request to the configured `kafka.fallback.api-url`:
 
-```json
+```http
+POST /v1/messages HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer <token>
+token: <token>
+X-API-Key: <api-key>
+
 {
   "topic": "order-events",
   "applicationName": "order-service",
@@ -75,6 +81,29 @@ When routing to the fallback service, the client sends a POST request matching t
     "traceId": "abc-123"
   }
 }
+```
+
+### Authentication Headers:
+- **`kafka.fallback.token`**: Sends `Authorization: Bearer <token>` and `token: <token>`. (If the configured token already begins with `Bearer `, it is preserved without duplicating).
+- **`kafka.fallback.api-key`**: Sends `X-API-Key: <api-key>`.
+- Both can be configured together or independently.
+
+### Equivalent cURL:
+```bash
+curl --location 'https://kafka-fallback.moglilabs.com/v1/messages' \
+--header 'Authorization: Bearer sk_3cBtgV5qy8_9NnQQURfU8Pr7NEdbaGb4JLKQSuWbqhA' \
+--header 'Content-Type: application/json' \
+--data '{
+    "topic": "order-events",
+    "applicationName": "order-service",
+    "payload": {
+        "orderId": "ORD-1001",
+        "status": "CONFIRMED"
+    },
+    "headers": {
+        "traceId": "abc-123"
+    }
+}'
 ```
 
 ### Contract Fields:
@@ -178,9 +207,9 @@ All properties are configured under `kafka.fallback.*`:
 | :--- | :--- | :--- |
 | `kafka.fallback.enabled` | `true` | Enable or disable the fallback starter |
 | `kafka.fallback.application-name` | `${spring.application.name}` | Calling application name sent in fallback DTO |
-| `kafka.fallback.api-url` | *(Required)* | HTTP fallback endpoint (e.g. `http://fallback-api/v1/messages`) |
-| `kafka.fallback.api-key` | `""` | Optional API Key sent in `X-API-Key` HTTP header |
+| `kafka.fallback.api-url` | *(Required)* | HTTP fallback endpoint (e.g. `https://kafka-fallback.moglilabs.com/v1/messages`) |
 | `kafka.fallback.token` | `""` | Optional Auth Token sent in `Authorization: Bearer <token>` and `token` headers |
+| `kafka.fallback.api-key` | `""` | Optional API Key sent in `X-API-Key` HTTP header |
 | `kafka.fallback.timeouts.kafka-send-timeout-ms` | `2000` | Max timeout for Kafka delivery before fallback |
 | `kafka.fallback.timeouts.api-connect-timeout-ms` | `1000` | HTTP connect timeout for fallback service |
 | `kafka.fallback.timeouts.api-read-timeout-ms` | `3000` | HTTP read timeout for fallback service |
@@ -189,35 +218,93 @@ All properties are configured under `kafka.fallback.*`:
 | `kafka.fallback.retry.max-attempts` | `2` | Number of retry attempts on HTTP fallback call |
 | `kafka.fallback.retry.backoff-ms` | `200` | Backoff multiplier in ms between HTTP retries |
 
-Example `application.yml`:
+### Recommended Kafka Producer Configuration (Fast Failover Tuning)
+
+> [!IMPORTANT]
+> **Why this is critical:**
+> By default, Apache Kafka's client sets `delivery.timeout.ms` to `120000` ms (2 minutes) and `max.block.ms` to `60000` ms (1 minute). If your Kafka cluster goes down, the producer would block and wait for up to **120 seconds** before reporting an error, delaying the HTTP fallback!
+> 
+> To enable **near-instantaneous failover** to the HTTP fallback service (within 2–3 seconds), configure low producer timeouts as shown below.
+
+### Example `application.yml`:
 ```yaml
 spring:
   application:
     name: order-service
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      acks: 1
+      retries: 3
+      properties:
+        delivery.timeout.ms: 3000   # Max time for delivery before triggering onError
+        request.timeout.ms: 2000    # Broker socket request timeout
+        max.block.ms: 2000          # Max block time for metadata fetch when broker is down
 
 kafka:
   fallback:
     enabled: true
-    api-url: https://fallback.internal.moglix.com/v1/messages
-    api-key: secret-service-key-xyz
+    application-name: order-service
+    api-url: https://kafka-fallback.moglilabs.com/v1/messages
+    token: ${FALLBACK_AUTH_TOKEN:sk_3cBtgV5qy8_9NnQQURfU8Pr7NEdbaGb4JLKQSuWbqhA}
+    # api-key: secret-api-key # optional alternative for gateways using X-API-Key
     timeouts:
-      kafka-send-timeout-ms: 1500
+      kafka-send-timeout-ms: 3000
       api-connect-timeout-ms: 1000
       api-read-timeout-ms: 2500
     circuit-breaker:
       failure-threshold: 3
       wait-duration-in-open-ms: 8000
+    retry:
+      max-attempts: 2
+      backoff-ms: 200
+```
+
+### Example `application.properties`:
+```properties
+spring.application.name=order-service
+spring.kafka.bootstrap-servers=localhost:9092
+
+# Fast Failover Producer Settings (Crucial for immediate fallback)
+spring.kafka.producer.acks=1
+spring.kafka.producer.retries=3
+spring.kafka.producer.properties.delivery.timeout.ms=3000
+spring.kafka.producer.properties.request.timeout.ms=2000
+spring.kafka.producer.properties.max.block.ms=2000
+
+# Fallback Starter Configuration
+kafka.fallback.enabled=true
+kafka.fallback.application-name=order-service
+kafka.fallback.api-url=https://kafka-fallback.moglilabs.com/v1/messages
+kafka.fallback.token=${FALLBACK_AUTH_TOKEN:sk_3cBtgV5qy8_9NnQQURfU8Pr7NEdbaGb4JLKQSuWbqhA}
+# kafka.fallback.api-key=secret-api-key
+kafka.fallback.timeouts.kafka-send-timeout-ms=3000
+kafka.fallback.timeouts.api-connect-timeout-ms=1000
+kafka.fallback.timeouts.api-read-timeout-ms=2500
+kafka.fallback.circuit-breaker.failure-threshold=3
+kafka.fallback.circuit-breaker.wait-duration-in-open-ms=8000
+kafka.fallback.retry.max-attempts=2
+kafka.fallback.retry.backoff-ms=200
 ```
 
 ---
 
 ## 6. Build and Verification
 
-Build and run tests across all modules:
+### Prerequisites
+- **JDK 17 or 21**: Required to build the full multi-module project (the `kafka-fallback-client-boot3` module targets Spring Boot 3 / Java 17).
+- **JDK 8+**: Supported if compiling only the Boot 2 stack (`kafka-fallback-client-core` and `kafka-fallback-client-boot2`).
+
+### Commands
+
+Build and run tests across all modules (using JDK 17/21):
 ```bash
-mvn clean test
+./mvnw clean test
+```
+
+Build only the Spring Boot 2 starter on Java 8:
+```bash
+./mvnw clean install -pl :kafka-fallback-client-core,:kafka-fallback-client-boot2
 ```
 
 Verify Boot 2 and Boot 3 structural and API parity:
