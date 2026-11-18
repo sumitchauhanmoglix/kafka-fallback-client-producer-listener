@@ -199,18 +199,9 @@ public abstract class AbstractKafkaFallbackClient implements KafkaFallbackOperat
         );
     }
 
-    private <T> void attachTimeout(CompletableFuture<T> future, long timeoutMs) {
-        if (timeoutMs <= 0) return;
-        scheduler.schedule(() -> {
-            if (!future.isDone()) {
-                future.completeExceptionally(new TimeoutException("Kafka send timed out after " + timeoutMs + " ms"));
-            }
-        }, timeoutMs, TimeUnit.MILLISECONDS);
-    }
-
     /**
      * Module-specific Kafka dispatch with result future for ProducerListener outcome handling.
-     * Subclasses using ProducerListener override this method.
+     * Subclasses override this method to dispatch to KafkaTemplate and ProducerListener.
      *
      * @param topic           target topic
      * @param payload         JSON string payload
@@ -218,48 +209,11 @@ public abstract class AbstractKafkaFallbackClient implements KafkaFallbackOperat
      * @param headers         optional headers
      * @param resultFuture    future to be completed by ProducerListener outcome
      */
-    protected void doSendToKafka(String topic,
-                                 String payload,
-                                 Object fallbackPayload,
-                                 Map<String, String> headers,
-                                 CompletableFuture<PublishResult> resultFuture) {
-        CompletableFuture<Void> kafkaSendFuture = doSendToKafka(topic, payload, fallbackPayload, headers);
-        long kafkaTimeoutMs = properties.getTimeouts().getKafkaSendTimeoutMs();
-
-        attachTimeout(kafkaSendFuture, kafkaTimeoutMs);
-
-        kafkaSendFuture.whenComplete((ignored, kafkaError) -> {
-            if (kafkaError == null) {
-                circuitBreaker.recordSuccess();
-                log.debug("Published directly to Kafka topic '{}'", topic);
-                resultFuture.complete(PublishResult.sentToKafka(topic));
-            } else {
-                circuitBreaker.recordFailure();
-                log.warn("Kafka publish failed or timed out for topic '{}': {}. Tripping to fallback HTTP service",
-                        topic, kafkaError.getMessage());
-                dispatchToFallback(topic, fallbackPayload, payload, headers, kafkaError, resultFuture);
-            }
-        });
-    }
-
-    /**
-     * Module-specific Kafka dispatch with fallbackPayload available for serializer adaptation.
-     *
-     * @param topic           target topic
-     * @param payload         JSON string payload
-     * @param fallbackPayload structured payload (Object or JsonNode)
-     * @param headers         optional headers
-     * @return future that completes when Kafka acks the message
-     */
-    protected CompletableFuture<Void> doSendToKafka(String topic, String payload, Object fallbackPayload, Map<String, String> headers) {
-        return doSendToKafka(topic, payload, headers);
-    }
-
-    protected CompletableFuture<Void> doSendToKafka(String topic, String payload, Map<String, String> headers) {
-        CompletableFuture<Void> f = new CompletableFuture<>();
-        f.complete(null);
-        return f;
-    }
+    protected abstract void doSendToKafka(String topic,
+                                          String payload,
+                                          Object fallbackPayload,
+                                          Map<String, String> headers,
+                                          CompletableFuture<PublishResult> resultFuture);
 
     public ScheduledExecutorService getScheduler() {
         return scheduler;

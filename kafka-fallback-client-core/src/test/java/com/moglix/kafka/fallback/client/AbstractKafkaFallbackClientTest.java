@@ -50,18 +50,22 @@ class AbstractKafkaFallbackClientTest {
         }
 
         @Override
-        protected CompletableFuture<Void> doSendToKafka(String topic, String payload, Map<String, String> headers) {
+        protected void doSendToKafka(String topic,
+                                     String payload,
+                                     Object fallbackPayload,
+                                     Map<String, String> headers,
+                                     CompletableFuture<PublishResult> resultFuture) {
             this.capturedTopic = topic;
             this.capturedPayload = payload;
             this.capturedHeaders = headers;
 
-            CompletableFuture<Void> future = new CompletableFuture<>();
             if (failKafka) {
-                future.completeExceptionally(new RuntimeException("Kafka broker down"));
+                getCircuitBreaker().recordFailure();
+                dispatchToFallback(topic, fallbackPayload, payload, headers, new RuntimeException("Kafka broker down"), resultFuture);
             } else {
-                future.complete(null);
+                getCircuitBreaker().recordSuccess();
+                resultFuture.complete(PublishResult.sentToKafka(topic));
             }
-            return future;
         }
     }
 

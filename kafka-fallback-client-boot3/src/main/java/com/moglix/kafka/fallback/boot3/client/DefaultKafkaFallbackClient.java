@@ -87,9 +87,9 @@ public class DefaultKafkaFallbackClient extends AbstractKafkaFallbackClient {
             }
             Map<String, Object> props = template.getProducerFactory().getConfigurationProperties();
             if (props != null) {
-                Object serializer = props.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-                if (serializer != null) {
-                    String className = serializer instanceof Class ? ((Class<?>) serializer).getName() : serializer.toString();
+                Object serializerConfig = props.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+                if (serializerConfig != null) {
+                    String className = serializerConfig instanceof Class ? ((Class<?>) serializerConfig).getName() : serializerConfig.toString();
                     if (className.contains("JsonSerializer")) {
                         return true;
                     }
